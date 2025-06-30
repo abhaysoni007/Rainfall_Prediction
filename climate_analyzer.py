@@ -36,6 +36,11 @@ class ClimateAnalyzer:
             
             rainfall_data = data[rain_var]
             
+            # Store original data for accurate calculations
+            indices['raw_data'] = rainfall_data
+            indices['scenario'] = scenario
+            indices['baseline_period'] = baseline_period
+            
             # 1. PRCPTOT - Total precipitation
             indices['PRCPTOT'] = self._calculate_prcptot(rainfall_data)
             
@@ -57,6 +62,14 @@ class ClimateAnalyzer:
             # 7. Simple daily intensity index
             indices['SDII'] = self._calculate_sdii(rainfall_data)
             
+            # Add spatial information
+            if hasattr(rainfall_data, 'lat') and hasattr(rainfall_data, 'lon'):
+                indices['spatial_info'] = {
+                    'lat': rainfall_data.lat.values,
+                    'lon': rainfall_data.lon.values,
+                    'resolution': f"{abs(rainfall_data.lat.values[1] - rainfall_data.lat.values[0]):.2f}°"
+                }
+            
             return indices
         except Exception as e:
             raise Exception(f"Error calculating rainfall indices: {str(e)}")
@@ -75,17 +88,29 @@ class ClimateAnalyzer:
     def _calculate_prcptot(self, rainfall_data):
         """Calculate total precipitation (PRCPTOT)."""
         try:
-            # Convert to mm/day if needed (assuming data is in kg/m2/s)
-            if rainfall_data.max() < 1:  # Likely in kg/m2/s
-                rainfall_data = rainfall_data * 86400  # Convert to mm/day
-            
-            # Sum over time dimension
-            if 'time' in rainfall_data.dims:
-                return rainfall_data.sum(dim='time')
-            elif 'year' in rainfall_data.dims:
-                return rainfall_data.sum(dim='year')
+            # Check data units and convert if needed
+            if hasattr(rainfall_data, 'units'):
+                units = rainfall_data.attrs.get('units', '')
+                if 'kg m-2 s-1' in units or 'kg/m2/s' in units:
+                    # Convert from kg/m2/s to mm/day
+                    rainfall_data = rainfall_data * 86400
+                elif 'mm/s' in units:
+                    # Convert from mm/s to mm/day
+                    rainfall_data = rainfall_data * 86400
             else:
-                return rainfall_data.sum()
+                # Auto-detect based on data range
+                max_val = float(rainfall_data.max().values)
+                if max_val < 0.1:  # Likely in kg/m2/s or mm/s
+                    rainfall_data = rainfall_data * 86400
+            
+            # Calculate seasonal total
+            if 'time' in rainfall_data.dims:
+                # For daily data, sum all days in the season
+                return rainfall_data.sum(dim='time', skipna=True)
+            elif 'year' in rainfall_data.dims:
+                return rainfall_data.sum(dim='year', skipna=True)
+            else:
+                return rainfall_data.sum(skipna=True)
         except Exception as e:
             raise Exception(f"Error calculating PRCPTOT: {str(e)}")
     
@@ -191,44 +216,75 @@ class ClimateAnalyzer:
         try:
             ensemble_results = {}
             
+            # Skip metadata fields
+            skip_fields = ['raw_data', 'scenario', 'baseline_period', 'spatial_info']
+            
             # For each index, calculate ensemble statistics
             for index_name, index_data in rainfall_indices.items():
-                # Calculate ensemble mean
-                ensemble_mean = index_data.mean()
-                
-                # Calculate percentiles for uncertainty bounds
-                percentiles = [10, 25, 50, 75, 90]
-                ensemble_percentiles = {}
-                
-                for p in percentiles:
-                    ensemble_percentiles[f'p{p}'] = np.percentile(index_data.values, p)
-                
-                # Calculate standard deviation
-                ensemble_std = index_data.std()
-                
-                # Store results
-                ensemble_results[index_name] = {
-                    'mean': float(ensemble_mean.values),
-                    'std': float(ensemble_std.values),
-                    'percentiles': ensemble_percentiles,
-                    'scenario': scenario,
-                    'projection_year': projection_year
-                }
+                if index_name in skip_fields:
+                    continue
+                    
+                # Ensure we have data arrays to analyze
+                if hasattr(index_data, 'values'):
+                    # Flatten data for statistical analysis
+                    data_values = index_data.values.flatten()
+                    data_values = data_values[~np.isnan(data_values)]  # Remove NaN values
+                    
+                    if len(data_values) > 0:
+                        # Calculate ensemble statistics
+                        ensemble_mean = np.mean(data_values)
+                        ensemble_std = np.std(data_values)
+                        
+                        # Calculate percentiles for uncertainty bounds
+                        percentiles = [10, 25, 50, 75, 90]
+                        ensemble_percentiles = {}
+                        
+                        for p in percentiles:
+                            ensemble_percentiles[f'p{p}'] = float(np.percentile(data_values, p))
+                        
+                        # Store results
+                        ensemble_results[index_name] = {
+                            'mean': float(ensemble_mean),
+                            'std': float(ensemble_std),
+                            'percentiles': ensemble_percentiles,
+                            'scenario': scenario,
+                            'projection_year': projection_year,
+                            'n_valid_points': len(data_values)
+                        }
             
-            # Calculate overall statistics
-            if 'PRCPTOT' in rainfall_indices:
-                prcptot_mean = ensemble_results['PRCPTOT']['mean']
+            # Calculate overall statistics based on PRCPTOT
+            if 'PRCPTOT' in ensemble_results:
+                prcptot_data = ensemble_results['PRCPTOT']
                 
-                # Estimate change relative to baseline (simplified)
-                baseline_reference = 1000  # mm (approximate baseline)
-                percent_change = ((prcptot_mean - baseline_reference) / baseline_reference) * 100
+                # Use realistic baseline for Indian monsoon rainfall
+                # Average JJAS rainfall for India is approximately 800-1200mm
+                baseline_reference = 1000  # mm (typical JJAS total)
+                
+                # Calculate percentage change
+                current_mean = prcptot_data['mean']
+                percent_change = ((current_mean - baseline_reference) / baseline_reference) * 100
+                
+                # Calculate confidence based on uncertainty range
+                uncertainty_range = prcptot_data['percentiles']['p90'] - prcptot_data['percentiles']['p10']
+                relative_uncertainty = (uncertainty_range / current_mean) * 100
+                
+                # Confidence level inversely proportional to uncertainty
+                if relative_uncertainty < 20:
+                    confidence_level = 90
+                elif relative_uncertainty < 40:
+                    confidence_level = 75
+                else:
+                    confidence_level = 60
                 
                 ensemble_results['summary'] = {
                     'mean_change': percent_change,
-                    'p10': ensemble_results['PRCPTOT']['percentiles']['p10'],
-                    'p90': ensemble_results['PRCPTOT']['percentiles']['p90'],
-                    'confidence_level': 80,  # Based on 10th-90th percentile range
-                    'affected_grid_points': int(np.sum(~np.isnan(rainfall_indices['PRCPTOT'].values))),
+                    'absolute_mean': current_mean,
+                    'baseline_value': baseline_reference,
+                    'p10': percent_change - ((baseline_reference - prcptot_data['percentiles']['p10']) / baseline_reference * 100),
+                    'p90': percent_change + ((prcptot_data['percentiles']['p90'] - baseline_reference) / baseline_reference * 100),
+                    'confidence_level': confidence_level,
+                    'uncertainty_range': uncertainty_range,
+                    'affected_grid_points': prcptot_data['n_valid_points'],
                     'scenario': scenario,
                     'projection_year': projection_year
                 }

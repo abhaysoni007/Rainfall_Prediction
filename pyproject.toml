@@ -5,6 +5,7 @@ description = "Add your description here"
 requires-python = ">=3.11"
 dependencies = [
     "cartopy>=0.24.1",
+    "kaleido>=1.0.0",
     "matplotlib>=3.10.3",
     "netcdf4>=1.7.2",
     "numpy>=2.3.1",

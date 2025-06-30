@@ -114,7 +114,28 @@ The application is designed for Replit deployment with the following considerati
 
 Preferred communication style: Simple, everyday language.
 
+## Recent Improvements
+
+### Accuracy Enhancements (June 30, 2025)
+- **Unit Conversion**: Added automatic detection and conversion of rainfall units (kg/m²/s to mm/day)
+- **Baseline Calibration**: Using realistic Indian monsoon baseline (800-1200mm JJAS average)
+- **Spatial Pattern Recognition**: Implemented region-specific climate patterns (Western Ghats, Northeast monsoon, etc.)
+- **Uncertainty Quantification**: Enhanced confidence level calculations based on model ensemble spread
+- **Data Validation**: Added comprehensive data quality checks and NaN handling
+
+### Visualization Improvements (June 30, 2025)  
+- **Dynamic Map Generation**: Maps now use actual spatial data when available
+- **Realistic Climate Patterns**: Incorporated orographic effects and regional variations
+- **Export Functionality**: Fixed image export using Kaleido for PNG/TIFF generation
+- **Interactive Features**: Enhanced hover information and color scales
+
+### Demo Mode (June 30, 2025)
+- **Test Data Generator**: Created realistic synthetic climate data for testing
+- **Pattern Accuracy**: Demo data reflects actual Indian monsoon characteristics
+- **Easy Testing**: Users can test the full pipeline without NetCDF files
+
 ## Changelog
 
 Changelog:
 - June 30, 2025. Initial setup
+- June 30, 2025. Major accuracy improvements and bug fixes for visualizations

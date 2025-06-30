@@ -63,60 +63,98 @@ def main():
 def data_processing_page():
     st.header("📊 Data Upload & Processing")
     
-    # Data upload section
-    st.subheader("1. Upload Climate Data")
+    # Add demo mode option
+    demo_mode = st.checkbox("Use demo data for testing", value=False)
     
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.write("**IMD Historical Data (1981-2010)**")
-        imd_file = st.file_uploader(
-            "Upload IMD NetCDF file",
-            type=['nc', 'netcdf'],
-            key="imd_upload"
-        )
-        
-        if imd_file is not None:
-            try:
-                # Process IMD data
-                with st.spinner("Processing IMD data..."):
-                    imd_data = st.session_state.data_processor.load_netcdf_data(imd_file)
+    if demo_mode:
+        st.info("Demo mode enabled - using synthetic climate data for demonstration")
+        if st.button("Generate Demo Data"):
+            with st.spinner("Generating demonstration data..."):
+                try:
+                    from demo_data_generator import DemoDataGenerator
+                    generator = DemoDataGenerator()
+                    
+                    # Generate demo data
+                    imd_data = generator.generate_imd_demo_data()
+                    cmip6_data = generator.generate_cmip6_demo_data()
+                    
+                    # Store in session state
                     st.session_state.imd_processed = imd_data
-                    st.success("✅ IMD data loaded successfully!")
-                    
-                    # Display data info
-                    st.write("**Data Information:**")
-                    st.write(f"Variables: {list(imd_data.data_vars.keys())}")
-                    st.write(f"Dimensions: {dict(imd_data.dims)}")
-                    st.write(f"Time range: {imd_data.time.min().values} to {imd_data.time.max().values}")
-                    
-            except Exception as e:
-                st.error(f"Error processing IMD data: {str(e)}")
-    
-    with col2:
-        st.write("**CMIP6 Projection Data**")
-        cmip6_file = st.file_uploader(
-            "Upload CMIP6 NetCDF file",
-            type=['nc', 'netcdf'],
-            key="cmip6_upload"
-        )
-        
-        if cmip6_file is not None:
-            try:
-                # Process CMIP6 data
-                with st.spinner("Processing CMIP6 data..."):
-                    cmip6_data = st.session_state.data_processor.load_netcdf_data(cmip6_file)
                     st.session_state.cmip6_processed = cmip6_data
-                    st.success("✅ CMIP6 data loaded successfully!")
+                    
+                    st.success("✅ Demo data generated successfully!")
                     
                     # Display data info
-                    st.write("**Data Information:**")
-                    st.write(f"Variables: {list(cmip6_data.data_vars.keys())}")
-                    st.write(f"Dimensions: {dict(cmip6_data.dims)}")
-                    st.write(f"Time range: {cmip6_data.time.min().values} to {cmip6_data.time.max().values}")
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        st.write("**IMD Demo Data (1981-2010)**")
+                        st.write(f"Variables: {list(imd_data.data_vars.keys())}")
+                        st.write(f"Grid points: {len(imd_data.lat)} x {len(imd_data.lon)}")
+                        st.write(f"Time steps: {len(imd_data.time)}")
                     
-            except Exception as e:
-                st.error(f"Error processing CMIP6 data: {str(e)}")
+                    with col2:
+                        st.write("**CMIP6 Demo Data (SSP5-8.5)**")
+                        st.write(f"Variables: {list(cmip6_data.data_vars.keys())}")
+                        st.write(f"Grid points: {len(cmip6_data.lat)} x {len(cmip6_data.lon)}")
+                        st.write(f"Time steps: {len(cmip6_data.time)}")
+                    
+                except Exception as e:
+                    st.error(f"Error generating demo data: {str(e)}")
+    else:
+        # Data upload section
+        st.subheader("1. Upload Climate Data")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.write("**IMD Historical Data (1981-2010)**")
+            imd_file = st.file_uploader(
+                "Upload IMD NetCDF file",
+                type=['nc', 'netcdf'],
+                key="imd_upload"
+            )
+            
+            if imd_file is not None:
+                try:
+                    # Process IMD data
+                    with st.spinner("Processing IMD data..."):
+                        imd_data = st.session_state.data_processor.load_netcdf_data(imd_file)
+                        st.session_state.imd_processed = imd_data
+                        st.success("✅ IMD data loaded successfully!")
+                        
+                        # Display data info
+                        st.write("**Data Information:**")
+                        st.write(f"Variables: {list(imd_data.data_vars.keys())}")
+                        st.write(f"Dimensions: {dict(imd_data.dims)}")
+                        st.write(f"Time range: {imd_data.time.min().values} to {imd_data.time.max().values}")
+                        
+                except Exception as e:
+                    st.error(f"Error processing IMD data: {str(e)}")
+        
+        with col2:
+            st.write("**CMIP6 Projection Data**")
+            cmip6_file = st.file_uploader(
+                "Upload CMIP6 NetCDF file",
+                type=['nc', 'netcdf'],
+                key="cmip6_upload"
+            )
+            
+            if cmip6_file is not None:
+                try:
+                    # Process CMIP6 data
+                    with st.spinner("Processing CMIP6 data..."):
+                        cmip6_data = st.session_state.data_processor.load_netcdf_data(cmip6_file)
+                        st.session_state.cmip6_processed = cmip6_data
+                        st.success("✅ CMIP6 data loaded successfully!")
+                        
+                        # Display data info
+                        st.write("**Data Information:**")
+                        st.write(f"Variables: {list(cmip6_data.data_vars.keys())}")
+                        st.write(f"Dimensions: {dict(cmip6_data.dims)}")
+                        st.write(f"Time range: {cmip6_data.time.min().values} to {cmip6_data.time.max().values}")
+                        
+                except Exception as e:
+                    st.error(f"Error processing CMIP6 data: {str(e)}")
     
     # Data preprocessing section
     st.subheader("2. Data Preprocessing")

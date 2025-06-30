@@ -139,8 +139,23 @@ class DataProcessor:
                         time=dataset.time.dt.month.isin([6, 7, 8, 9])
                     )
                     
-                    # Group by year and sum
-                    seasonal_totals = seasonal.groupby('time.year').sum('time')
+                    # Check if data is in flux units (kg/m2/s or mm/s) and convert to daily
+                    precip_vars = ['pr', 'precipitation', 'precip', 'rain', 'rainfall']
+                    for var in dataset.data_vars:
+                        if var.lower() in precip_vars:
+                            if hasattr(dataset[var], 'units'):
+                                units = dataset[var].attrs.get('units', '')
+                                if 'kg m-2 s-1' in units or 'kg/m2/s' in units or 'mm/s' in units:
+                                    # Convert from per second to per day
+                                    seasonal[var] = seasonal[var] * 86400
+                                    seasonal[var].attrs['units'] = 'mm/day'
+                    
+                    # Group by year and sum to get seasonal totals
+                    seasonal_totals = seasonal.groupby('time.year').sum('time', skipna=True)
+                    
+                    # Add metadata
+                    seasonal_totals.attrs['season'] = season
+                    seasonal_totals.attrs['months'] = 'June-September'
                     
                     seasonal_data[dataset_name] = seasonal_totals
                 else:

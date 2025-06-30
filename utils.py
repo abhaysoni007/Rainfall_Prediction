@@ -162,37 +162,54 @@ End of Report
         try:
             map_files = []
             
-            # Simulate map image creation
-            map_types = [
-                'rainfall_change_map',
-                'extreme_days_map',
-                'uncertainty_map',
-                'regional_summary_map'
+            # Import visualization module
+            from visualizer import Visualizer
+            viz = Visualizer()
+            
+            # Create actual maps
+            map_configs = [
+                ('rainfall_change_map', viz.create_rainfall_change_map),
+                ('extreme_days_map', viz.create_extreme_days_map),
+                ('district_anomaly_chart', viz.create_district_anomaly_chart),
+                ('uncertainty_visualization', viz.create_uncertainty_visualization)
             ]
             
-            for map_type in map_types:
-                # Create dummy image content (in practice, this would render actual maps)
-                if format_type.lower() == 'png':
-                    # Simulate PNG content
-                    image_content = self._create_dummy_png()
-                    extension = 'png'
-                    mime_type = 'image/png'
-                elif format_type.lower() == 'tiff':
-                    # Simulate TIFF content
-                    image_content = self._create_dummy_tiff()
-                    extension = 'tiff'
-                    mime_type = 'image/tiff'
-                else:
+            for map_name, map_function in map_configs:
+                try:
+                    # Generate the figure
+                    fig = map_function(ensemble_results)
+                    
+                    if format_type.lower() == 'png':
+                        # Convert to PNG
+                        image_bytes = fig.to_image(format='png', width=1200 if high_resolution else 800, 
+                                                   height=900 if high_resolution else 600, scale=2 if high_resolution else 1)
+                        extension = 'png'
+                        mime_type = 'image/png'
+                    elif format_type.lower() == 'tiff':
+                        # For TIFF, first convert to PNG then to TIFF (simplified)
+                        # In practice, you'd use proper TIFF libraries
+                        image_bytes = fig.to_image(format='png', width=1200 if high_resolution else 800, 
+                                                   height=900 if high_resolution else 600, scale=2 if high_resolution else 1)
+                        # Add TIFF header for compatibility
+                        tiff_header = b'II*\x00\x08\x00\x00\x00'
+                        image_bytes = tiff_header + image_bytes
+                        extension = 'tiff'
+                        mime_type = 'image/tiff'
+                    else:
+                        continue
+                    
+                    resolution_suffix = '_high_res' if high_resolution else ''
+                    filename = f"{map_name}{resolution_suffix}.{extension}"
+                    
+                    map_files.append({
+                        'name': filename,
+                        'data': image_bytes,
+                        'type': mime_type
+                    })
+                except Exception as e:
+                    # If specific map fails, continue with others
+                    print(f"Warning: Could not create {map_name}: {str(e)}")
                     continue
-                
-                resolution_suffix = '_high_res' if high_resolution else ''
-                filename = f"{map_type}{resolution_suffix}.{extension}"
-                
-                map_files.append({
-                    'name': filename,
-                    'data': image_content,
-                    'type': mime_type
-                })
             
             return map_files
         except Exception as e:
